@@ -1,4 +1,5 @@
 #include <glm/glm.hpp>
+#include <spdlog/spdlog.h>
 #include <imgui/imgui.h>
 
 #include <engine/Engine.h>
@@ -99,7 +100,10 @@ namespace EngineApp {
             m_vertexBuffer.addFloatLayoutAttribute(3);
             m_vertexBuffer.setData<glm::vec3>(vertices);
 
-            m_characterMesh.fromFile("../data/man_suit.fbx");
+            if (!(m_characterMeshLoaded = m_characterMesh.fromFile("../data/man_suit.fbx")))
+            {
+                spdlog::warn("cannot load character man_suit fbx file");
+            }
         }
 
         void update() override
@@ -125,11 +129,15 @@ namespace EngineApp {
             m_gridFloorShaderProgram.use();
             m_vertexBuffer.drawTriangles();
 
-            m_characterShader.use();
-            m_characterMesh.render();
+            if (m_characterMeshLoaded)
+            {
+                m_characterShader.use();
+                m_characterMesh.render();
+            }
         }
 
     private:
+        bool m_characterMeshLoaded;
         unsigned int u_mvp, u_mvpChar;
         Engine::Mesh m_characterMesh;
         Engine::Renderer::VertexBuffer m_vertexBuffer;

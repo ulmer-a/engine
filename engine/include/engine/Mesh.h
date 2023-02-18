@@ -12,12 +12,9 @@ namespace Engine {
 
         ~Mesh() = default;
 
-        void fromFile(const std::string &filename);
+        bool fromFile(const std::string &filename);
 
         void render();
-
-    private:
-        void clear();
 
     private:
         Renderer::IndexBuffer m_indexBuffer;

@@ -16,12 +16,15 @@ struct MeshVertex
 
 static_assert(sizeof(MeshVertex) == sizeof(float) * 6);
 
-void Mesh::fromFile(const std::string &filename)
+bool Mesh::fromFile(const std::string &filename)
 {
     Assimp::Importer Importer;
     const auto scene = Importer.ReadFile(filename.c_str(),
                                          aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
                                          aiProcess_JoinIdenticalVertices);
+
+    if (scene == nullptr)
+        return false;
 
     auto aiToGlmVec3 = [](const aiVector3D &vec) {
         return glm::vec3(vec.x, vec.y, vec.z);
@@ -61,6 +64,7 @@ void Mesh::fromFile(const std::string &filename)
 
     spdlog::debug("loaded {} meshes with {} vertices and {} indices in total",
                   scene->mNumMeshes, vertices.size(), indices.size());
+    return true;
 }
 
 void Mesh::render()
