@@ -50,6 +50,8 @@ namespace Engine {
              */
             void addFloatLayoutAttribute(size_t count);
 
+            void addUnsignedIntLayoutAttribute(size_t count);
+
         private:
             void setRawData(const void *data, size_t size, size_t count);
 

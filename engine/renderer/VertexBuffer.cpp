@@ -71,6 +71,15 @@ void VertexBuffer::addFloatLayoutAttribute(size_t count)
     });
 }
 
+void VertexBuffer::addUnsignedIntLayoutAttribute(size_t count)
+{
+    m_attributes.push_back(VertexAttribute{
+            GL_UNSIGNED_INT,
+            sizeof(unsigned int),
+            count
+    });
+}
+
 void VertexBuffer::setVertexAttributes(size_t vertexSize)
 {
     // assuming the vertex buffer object is already bound!
@@ -79,7 +88,13 @@ void VertexBuffer::setVertexAttributes(size_t vertexSize)
     for (unsigned int i = 0; i < m_attributes.size(); i++)
     {
         const auto &attr = m_attributes[i];
-        glVertexAttribPointer(i, attr.count, attr.type, GL_FALSE, vertexSize, (void *) offset);
+        if (attr.type == GL_UNSIGNED_INT) // TODO catch all integer types
+        {
+            glVertexAttribIPointer(i, attr.count, attr.type, vertexSize, (void *) offset);
+        } else
+        {
+            glVertexAttribPointer(i, attr.count, attr.type, GL_FALSE, vertexSize, (void *) offset);
+        }
         glEnableVertexAttribArray(i);
         offset += attr.size * attr.count;
     }
