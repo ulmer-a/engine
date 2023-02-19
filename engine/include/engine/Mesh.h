@@ -13,22 +13,18 @@ namespace Engine {
     namespace _internal {
         const size_t MAX_WEIGHTS_PER_BONE = 4;
 
-        struct IdWeightPair
-        {
-            unsigned int boneId;
-            float weight;
-        } __attribute__((packed));
-
         struct MeshVertex
         {
             glm::vec3 position;
             glm::vec3 normals;
             glm::vec3 textureCoords;
-            IdWeightPair boneWeights[4];
+            unsigned int boneIds[4];
+            float boneWeights[4];
         };
 
-        static_assert(sizeof(IdWeightPair) == 8);
-        static_assert(sizeof(MeshVertex) == sizeof(float) * 9 + MAX_WEIGHTS_PER_BONE * sizeof(IdWeightPair));
+        static_assert(sizeof(MeshVertex) == (sizeof(float) * 9
+                                             + MAX_WEIGHTS_PER_BONE * sizeof(unsigned int)
+                                             + MAX_WEIGHTS_PER_BONE * sizeof(float)));
     }
 
     class Mesh
@@ -46,6 +42,8 @@ namespace Engine {
         void readMeshVertices(const aiScene *scene, std::vector<_internal::MeshVertex> &vertices);
 
         void fillVertexBoneInfo(const aiScene *scene, std::vector<_internal::MeshVertex> &vertices);
+
+        void fillAnimationInfo(const aiScene *scene);
 
     private:
         std::vector<unsigned int> m_meshIndexOffsets;

@@ -35,16 +35,14 @@ bool Mesh::read(const std::string &filename, bool rigged)
     if (rigged)
     {
         fillVertexBoneInfo(scene, vertices);
+        fillAnimationInfo(scene);
     }
 
     m_vertexBuffer.addFloatLayoutAttribute(3);  // position
     m_vertexBuffer.addFloatLayoutAttribute(3);  // normals
     m_vertexBuffer.addFloatLayoutAttribute(3);  // texture coords
-    for (unsigned i = 0; i < MAX_WEIGHTS_PER_BONE; i++)
-    {
-        m_vertexBuffer.addUnsignedIntLayoutAttribute(1);    // bone id
-        m_vertexBuffer.addFloatLayoutAttribute(1);          // weight
-    }
+    m_vertexBuffer.addUnsignedIntLayoutAttribute(4);  // bone ids
+    m_vertexBuffer.addFloatLayoutAttribute(4);  // bone weights
 
     m_vertexBuffer.setData(vertices);
     return true;
@@ -63,7 +61,8 @@ void Mesh::readMeshVertices(const aiScene *scene, std::vector<MeshVertex> &verti
                 .position = glm::vec3(),
                 .normals = glm::vec3(),
                 .textureCoords = glm::vec3(),
-                .boneWeights = {IdWeightPair{(unsigned int) -1, 0.0f}}
+                .boneIds = {(unsigned int) -1},
+                .boneWeights = {0.0f},
         });
 
         for (unsigned int v = 0; v < mesh->mNumVertices; v++)
@@ -110,11 +109,11 @@ void Mesh::fillVertexBoneInfo(const aiScene *scene, std::vector<MeshVertex> &ver
                     bool assigned = false;
                     for (unsigned int n = 0; n < MAX_WEIGHTS_PER_BONE; n++)
                     {
-                        if (vertex.boneWeights[n].boneId > (unsigned int) -1)
+                        if (vertex.boneIds[n] > (unsigned int) -1)
                             continue;
 
-                        vertex.boneWeights[n].boneId = b; // TODO !!!!!
-                        vertex.boneWeights[n].weight = weight->mWeight;
+                        vertex.boneIds[n] = b; // TODO !!!!!
+                        vertex.boneWeights[n] = weight->mWeight;
                         assigned = true;
                     }
 
@@ -125,6 +124,14 @@ void Mesh::fillVertexBoneInfo(const aiScene *scene, std::vector<MeshVertex> &ver
     }
 }
 
+void Mesh::fillAnimationInfo(const aiScene *scene)
+{
+    (void) scene;
+//    for (unsigned int i = 0; i < scene->mNumAnimations; i++)
+//    {
+//        const auto animation = scene->mAnimations[i];
+//    }
+}
 
 void Mesh::render()
 {
