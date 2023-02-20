@@ -22,7 +22,8 @@ namespace EngineApp {
     public:
         DemoSceneConfigWindow()
                 : Window("Demo Scene Config Window")
-                  , m_animationStep(0)
+                  , m_animation(0)
+                  , m_animationStep(0.0)
                   , m_cameraPos{-150.0, 200.0, 200.0}
                   , m_cameraLookAt{0.0, 100.0, 10.0}
         {}
@@ -42,11 +43,13 @@ namespace EngineApp {
             ImGui::SliderFloat3("Camera Position", (float *) &m_cameraPos, -200.0, 200.0);
             ImGui::SliderFloat3("Camera Look-At", (float *) &m_cameraLookAt, -200.0, 200.0);
             ImGui::Separator();
-            ImGui::SliderInt("Animation Step", &m_animationStep, 0, 255);
+            ImGui::SliderFloat("Animation Step", &m_animationStep, 0.0, 1.0);
+            ImGui::SliderInt("Animation Select", &m_animation, 0, 23);
         }
 
     public:
-        int m_animationStep;
+        int m_animation;
+        float m_animationStep;
         float m_cameraPos[3];
         float m_cameraLookAt[3];
     };
@@ -118,7 +121,7 @@ namespace EngineApp {
             getCamera()->setLookAtPoint(glm::vec3(config->m_cameraLookAt[0],
                                                   config->m_cameraLookAt[1], config->m_cameraLookAt[2]));
 
-            m_characterMesh.getAnimationTransforms(0, config->m_animationStep, m_boneTransforms);
+            m_characterMesh.getAnimationTransforms(config->m_animation, config->m_animationStep, m_boneTransforms);
         }
 
         void render(const glm::mat4 &projectionMatrix) override

@@ -49,10 +49,10 @@ unsigned int ShaderProgram::getUniformByName(const char *name)
     return glGetUniformLocation(m_id, name);
 }
 
-void ShaderProgram::setUniform(unsigned int id, int f)
+void ShaderProgram::setUniform(unsigned int id, float f)
 {
     this->use();
-    glUniform1i(id, f);
+    glUniform1f(id, f);
 }
 
 void ShaderProgram::setUniform(unsigned int id, const glm::mat4 &mat)

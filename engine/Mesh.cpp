@@ -1,5 +1,7 @@
 #include <map>
 #include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <spdlog/spdlog.h>
 #include <assimp/scene.h>
@@ -98,7 +100,7 @@ Mesh::getAnimationTransforms(unsigned int animationId, float normalizedTime, std
         boneTransforms.resize(getBoneCount());
     }
 
-    buildBoneTransforms(animation, normalizedTime, scene->mRootNode, glm::mat4(1.0f), boneTransforms);
+    buildBoneTransforms(animation, normalizedTime, scene->mRootNode, m_globalInverseTransform, boneTransforms);
 }
 
 void Mesh::fillBasicVertexData(std::vector<MeshVertex> &vertices)
@@ -205,25 +207,16 @@ void Mesh::buildBoneTransforms(const aiAnimation *animation, float normalizedTim
     auto keyframeSet = getBoneKeyframes(animation, node->mName.C_Str());
     if (keyframeSet != nullptr)
     {
-//        // Interpolate scaling and generate scaling transformation matrix
-//        aiVector3D Scaling;
-//        CalcInterpolatedScaling(Scaling, AnimationTime, pNodeAnim);
-//        Matrix4f ScalingM;
-//        ScalingM.InitScaleTransform(Scaling.x, Scaling.y, Scaling.z);
-//
-//        // Interpolate rotation and generate rotation transformation matrix
-//        aiQuaternion RotationQ;
-//        CalcInterpolatedRotation(RotationQ, AnimationTime, pNodeAnim);
-//        Matrix4f RotationM = Matrix4f(RotationQ.GetMatrix());
-//
-//        // Interpolate translation and generate translation transformation matrix
-//        aiVector3D Translation;
-//        CalcInterpolatedPosition(Translation, AnimationTime, pNodeAnim);
-//        Matrix4f TranslationM;
-//        TranslationM.InitTranslationTransform(Translation.x, Translation.y, Translation.z);
-//
-//        // Combine the above transformations
-//        NodeTransformation = TranslationM * RotationM * ScalingM;
+        assert(keyframeSet->mNumPositionKeys == keyframeSet->mNumRotationKeys);
+        assert(keyframeSet->mNumRotationKeys == keyframeSet->mNumScalingKeys);
+
+        unsigned int t = (unsigned int) (normalizedTime * (float) keyframeSet->mNumRotationKeys);
+
+        auto translation = aiToGlmVec3(keyframeSet->mPositionKeys[t].mValue);
+        auto scaling = aiToGlmVec3(keyframeSet->mScalingKeys[t].mValue);
+        auto rotation = aiToGlmQuat(keyframeSet->mRotationKeys[t].mValue);
+
+        nodeTransform = glm::translate(translation) * glm::toMat4(rotation) * glm::scale(scaling);
     }
 
     // The parentTransform will transform a vertex from this node's parent's coordinate system all
@@ -236,8 +229,8 @@ void Mesh::buildBoneTransforms(const aiAnimation *animation, float normalizedTim
     auto boneId = getBoneId(node->mName.C_Str());
     if (boneId.has_value())
     {
-        boneTransforms[boneId.value()] = m_globalInverseTransform *
-                                         globalTransform * getBoneOffsetMatrix(boneId.value());
+        boneTransforms[boneId.value()] = /*m_globalInverseTransform **/
+                globalTransform * getBoneOffsetMatrix(boneId.value());
     }
 
     // Now perform the same actions for the node's children as well.

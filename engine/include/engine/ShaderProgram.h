@@ -27,7 +27,7 @@ namespace Engine {
 
             unsigned int getUniformByName(const char *name);
 
-            void setUniform(unsigned int id, int f);
+            void setUniform(unsigned int id, float f);
 
             void setUniform(unsigned int id, const glm::mat4 &mat);
 
