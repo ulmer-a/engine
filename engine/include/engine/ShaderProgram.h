@@ -29,6 +29,8 @@ namespace Engine {
 
             void setUniform(unsigned int id, const glm::mat4 &mat);
 
+            void setUniform(unsigned int id, const std::vector<glm::mat4> &mats);
+
         private:
             unsigned int m_id;
         };

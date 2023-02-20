@@ -55,6 +55,12 @@ void ShaderProgram::setUniform(unsigned int id, const glm::mat4 &mat)
     glUniformMatrix4fv(id, 1, GL_FALSE, glm::value_ptr(mat));
 }
 
+void ShaderProgram::setUniform(unsigned int id, const std::vector<glm::mat4> &mats)
+{
+    this->use();
+    glUniformMatrix4fv(id, mats.size(), GL_FALSE, glm::value_ptr(*mats.data()));
+}
+
 void ShaderProgram::compileAndLinkShaders(const std::string &vertexShaderFile, const std::string &fragmentShaderFile)
 {
     Shader vertexShader(vertexShaderFile, Shader::ShaderType::VertexShader);
@@ -70,3 +76,4 @@ void ShaderProgram::compileAndLinkShaders(const std::string &vertexShaderFile, c
 
     link();
 }
+

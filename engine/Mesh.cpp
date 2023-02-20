@@ -1,5 +1,6 @@
 #include <map>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <spdlog/spdlog.h>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -10,46 +11,95 @@
 using namespace Engine;
 using namespace Engine::_internal;
 
+static_assert(sizeof(MeshVertex) == (sizeof(float) * 9
+                                     + MAX_WEIGHTS_PER_BONE * sizeof(unsigned int)
+                                     + MAX_WEIGHTS_PER_BONE * sizeof(float)));
+
 static inline glm::vec3 aiToGlmVec3(const aiVector3D &vec)
 {
     return glm::vec3(vec.x, vec.y, vec.z);
 }
 
-bool Mesh::read(const std::string &filename, bool rigged)
+static inline glm::mat4 aiToGlmMat4(const aiMatrix4x4 &mat)
 {
-    Assimp::Importer importer;
-    const auto scene = importer.ReadFile(filename.c_str(),
-                                         aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
-                                         aiProcess_JoinIdenticalVertices);
+    return glm::transpose(glm::make_mat4(&mat.a1));
+}
+
+static inline glm::quat aiToGlmQuat(const aiQuaternion &q)
+{
+    return glm::quat(q.w, q.x, q.y, q.z);
+}
+
+void Mesh::render()
+{
+    m_vertexBuffer.drawTriangles(m_indexBuffer);
+}
+
+bool Mesh::fromFile(const std::string &filename)
+{
+    const auto scene = m_importer.ReadFile(filename.c_str(),
+                                           aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
+                                           aiProcess_JoinIdenticalVertices);
 
     if (scene == nullptr)
     {
-        spdlog::error("cannot load file {}: {}", filename, importer.GetErrorString());
+        spdlog::error("cannot load file {}: {}", filename, m_importer.GetErrorString());
         return false;
     }
 
-    // read all the vertex data from the file (pos, normals, texture coords, ...)
+    // read all the vertex and bone data from the file (pos, normals, texture coords, ...)
+    // and fill the vertex buffer with that data
     std::vector<MeshVertex> vertices;
-    readMeshVertices(scene, vertices);
+    fillBasicVertexData(vertices);
+    fillBoneData(vertices);
 
-    if (rigged)
-    {
-        fillVertexBoneInfo(scene, vertices);
-        fillAnimationInfo(scene);
-    }
-
+    // set vertex buffer data layout
     m_vertexBuffer.addFloatLayoutAttribute(3);  // position
     m_vertexBuffer.addFloatLayoutAttribute(3);  // normals
     m_vertexBuffer.addFloatLayoutAttribute(3);  // texture coords
-    m_vertexBuffer.addUnsignedIntLayoutAttribute(4);  // bone ids
-    m_vertexBuffer.addFloatLayoutAttribute(4);  // bone weights
+    m_vertexBuffer.addUnsignedIntLayoutAttribute(MAX_WEIGHTS_PER_BONE);  // bone ids
+    m_vertexBuffer.addFloatLayoutAttribute(MAX_WEIGHTS_PER_BONE);  // bone weights
 
+    // upload vertices to vertex buffer in GPU memory
     m_vertexBuffer.setData(vertices);
     return true;
 }
 
-void Mesh::readMeshVertices(const aiScene *scene, std::vector<MeshVertex> &vertices)
+std::optional<unsigned int> Mesh::getAnimationId(const std::string &animationName)
 {
+    auto scene = m_importer.GetScene();
+    assert(scene != nullptr);
+
+    for (unsigned int i = 0; i < scene->mNumAnimations; i++)
+    {
+        const auto animation = scene->mAnimations[i];
+        if (animationName == animation->mName.C_Str())
+        {
+            return std::optional{i};
+        }
+    }
+
+    return std::nullopt;
+}
+
+void
+Mesh::getAnimationTransforms(unsigned int animationId, float normalizedTime, std::vector<glm::mat4> &boneTransforms)
+{
+    auto scene = m_importer.GetScene();
+    assert(scene != nullptr);
+
+    assert(animationId < scene->mNumAnimations);
+    const auto animation = scene->mAnimations[animationId];
+    boneTransforms.resize(getBoneCount());
+
+    buildBoneTransforms(animation, normalizedTime, scene->mRootNode, glm::mat4(1.0f), boneTransforms);
+}
+
+void Mesh::fillBasicVertexData(std::vector<MeshVertex> &vertices)
+{
+    auto scene = m_importer.GetScene();
+    assert(scene != nullptr);
+
     std::vector<unsigned int> indices;
     m_meshIndexOffsets.resize(scene->mNumMeshes);
     for (unsigned int i = 0; i < scene->mNumMeshes; i++)
@@ -61,8 +111,8 @@ void Mesh::readMeshVertices(const aiScene *scene, std::vector<MeshVertex> &verti
                 .position = glm::vec3(),
                 .normals = glm::vec3(),
                 .textureCoords = glm::vec3(),
-                .boneIds = {(unsigned int) -1},
-                .boneWeights = {0.0f},
+                .boneIds = {},
+                .boneWeights = {},
         });
 
         for (unsigned int v = 0; v < mesh->mNumVertices; v++)
@@ -84,18 +134,23 @@ void Mesh::readMeshVertices(const aiScene *scene, std::vector<MeshVertex> &verti
             indices.push_back(indexOffset + face.mIndices[2]);
         }
     }
+
+    // upload indices to index buffer in GPU memory
     m_indexBuffer.setIndices(indices);
 
-    spdlog::debug("loaded {} meshes with {} vertices and {} indices in total",
-                  scene->mNumMeshes, vertices.size(), indices.size());
+    spdlog::info("loaded {} meshes with {} vertices and {} indices in total",
+                 scene->mNumMeshes, vertices.size(), indices.size());
 }
 
-void Mesh::fillVertexBoneInfo(const aiScene *scene, std::vector<MeshVertex> &vertices)
+void Mesh::fillBoneData(std::vector<_internal::MeshVertex> &vertices)
 {
+    auto scene = m_importer.GetScene();
+    assert(scene != nullptr);
+
     for (unsigned int i = 0; i < scene->mNumMeshes; i++)
     {
         const auto mesh = scene->mMeshes[i];
-        unsigned int meshOffset = m_meshIndexOffsets[i];
+        unsigned int meshOffset = getMeshIndexOffset(i);
         if (mesh->HasBones())
         {
             for (unsigned int b = 0; b < mesh->mNumBones; b++)
@@ -103,18 +158,22 @@ void Mesh::fillVertexBoneInfo(const aiScene *scene, std::vector<MeshVertex> &ver
                 const auto bone = mesh->mBones[b];
                 for (unsigned int w = 0; w < bone->mNumWeights; w++)
                 {
-                    const auto weight = bone->mWeights;
-                    auto &vertex = vertices[meshOffset + weight->mVertexId];
+                    auto boneId = getBoneIdCreate(bone->mName.C_Str());
+                    m_boneOffsetMatrixCache[boneId] = aiToGlmMat4(bone->mOffsetMatrix);
+
+                    const auto &weight = bone->mWeights[w];
+                    auto &vertex = vertices[meshOffset + weight.mVertexId];
 
                     bool assigned = false;
                     for (unsigned int n = 0; n < MAX_WEIGHTS_PER_BONE; n++)
                     {
-                        if (vertex.boneIds[n] > (unsigned int) -1)
+                        if (vertex.boneWeights[n] != 0.0f)
                             continue;
 
-                        vertex.boneIds[n] = b; // TODO !!!!!
-                        vertex.boneWeights[n] = weight->mWeight;
+                        vertex.boneIds[n] = boneId;
+                        vertex.boneWeights[n] = weight.mWeight;
                         assigned = true;
+                        break;
                     }
 
                     assert(assigned);
@@ -124,50 +183,114 @@ void Mesh::fillVertexBoneInfo(const aiScene *scene, std::vector<MeshVertex> &ver
     }
 }
 
-void Mesh::fillAnimationInfo(const aiScene *scene)
+void Mesh::buildBoneTransforms(const aiAnimation *animation, float normalizedTime, const aiNode *node,
+                               glm::mat4 parentTransform, std::vector<glm::mat4> &boneTransforms)
 {
-    (void) scene;
-//    for (unsigned int i = 0; i < scene->mNumAnimations; i++)
-//    {
-//        const auto animation = scene->mAnimations[i];
-//    }
+    // the nodeTransform matrix transforms from the node's coordinate system to its
+    // parent node's coordinate system.
+    auto nodeTransform = aiToGlmMat4(node->mTransformation);
+
+    // if the node is not a dummy node but an actual bone, it has a set of keyframes
+    // associated with it. their translation, scaling and rotation components can be used
+    // to replace the nodeTransform. this is the part that makes the animated mesh move!
+    auto keyframeSet = getBoneKeyframes(animation, node->mName.C_Str());
+    if (keyframeSet != nullptr)
+    {
+//        // Interpolate scaling and generate scaling transformation matrix
+//        aiVector3D Scaling;
+//        CalcInterpolatedScaling(Scaling, AnimationTime, pNodeAnim);
+//        Matrix4f ScalingM;
+//        ScalingM.InitScaleTransform(Scaling.x, Scaling.y, Scaling.z);
+//
+//        // Interpolate rotation and generate rotation transformation matrix
+//        aiQuaternion RotationQ;
+//        CalcInterpolatedRotation(RotationQ, AnimationTime, pNodeAnim);
+//        Matrix4f RotationM = Matrix4f(RotationQ.GetMatrix());
+//
+//        // Interpolate translation and generate translation transformation matrix
+//        aiVector3D Translation;
+//        CalcInterpolatedPosition(Translation, AnimationTime, pNodeAnim);
+//        Matrix4f TranslationM;
+//        TranslationM.InitTranslationTransform(Translation.x, Translation.y, Translation.z);
+//
+//        // Combine the above transformations
+//        NodeTransformation = TranslationM * RotationM * ScalingM;
+    }
+
+    // The parentTransform will transform a vertex from this node's parent's coordinate system all
+    // the way to the scene-local coordinate system. By combining both the parentTransform and the
+    // nodeTransform we extend this transform to the current node's coordinate system.
+    auto globalTransform = parentTransform * nodeTransform;
+
+    // If this node has an associated bone, we store its final transform in the vector of transforms
+    // that is going to be uploaded to the vertex shader.
+    auto boneId = getBoneId(node->mName.C_Str());
+    if (boneId.has_value())
+    {
+        boneTransforms[boneId.value()] = /* globalInverseTransform * */
+                globalTransform * getBoneOffsetMatrix(boneId.value());
+    }
+
+    // Now perform the same actions for the node's children as well.
+    for (unsigned int i = 0; i < node->mNumChildren; i++)
+    {
+        buildBoneTransforms(animation, normalizedTime, node->mChildren[i],
+                            globalTransform, boneTransforms);
+    }
 }
 
-void Mesh::render()
+unsigned int Mesh::getBoneCount() const
 {
-    m_vertexBuffer.drawTriangles(m_indexBuffer);
+    return m_boneOffsetMatrixCache.size();
 }
 
-//const aiNode *Mesh::findNode(const std::string &nodeName, const aiNode *node)
-//{
-//    if (node == nullptr)
-//        return findNode(nodeName, m_scene->mRootNode);
-//}
-//
-//void Mesh::markNodeUsed(const std::string &nodeName, unsigned int meshIndex)
-//{
-//    const auto node = findNode(nodeName);
-//    assert(node != nullptr);
-//
-//    if (m_nodesUsed.find(nodeName) == m_nodesUsed.end())
-//    {
-//        m_nodesUsed.insert(nodeName);
-//
-//        const auto parentNode = node->mParent;
-//        if (!nodeContainsMesh(node, meshIndex) && parentNode != nullptr)
-//        {
-//            markNodeUsed(parentNode->mName.C_Str(), meshIndex);
-//        }
-//    }
-//}
-//
-//bool Mesh::nodeContainsMesh(const aiNode *node, unsigned int meshIndex)
-//{
-//    assert(node != nullptr);
-//    for (unsigned int i = 0; i < node->mNumMeshes; i++)
-//    {
-//        if (meshIndex == node->mMeshes[i])
-//            return true;
-//    }
-//    return false;
-//}
+const aiNodeAnim *Mesh::getBoneKeyframes(const aiAnimation *animation, const std::string &boneName)
+{
+    assert(animation != nullptr);
+    for (unsigned int i = 0; i < animation->mNumChannels; i++)
+    {
+        const auto channel = animation->mChannels[i];
+        if (boneName == channel->mNodeName.C_Str())
+        {
+            return channel;
+        }
+    }
+
+    return nullptr;
+}
+
+unsigned int Mesh::getMeshIndexOffset(unsigned int meshIndex) const
+{
+    return m_meshIndexOffsets[meshIndex];
+}
+
+std::optional<unsigned int> Mesh::getBoneId(const std::string &boneName) const
+{
+    auto it = m_boneIds.find(boneName);
+    if (it != m_boneIds.end())
+    {
+        return std::optional{it->second};
+    }
+
+    return std::nullopt;
+}
+
+unsigned int Mesh::getBoneIdCreate(const std::string &boneName)
+{
+    auto it = m_boneIds.find(boneName);
+    if (it != m_boneIds.end())
+    {
+        return it->second;
+    }
+
+    auto id = m_boneOffsetMatrixCache.size();
+    m_boneOffsetMatrixCache.resize(id + 1);
+    m_boneIds.insert(std::make_pair(boneName, id));
+    return id;
+}
+
+const glm::mat4 &Mesh::getBoneOffsetMatrix(unsigned int boneId) const
+{
+    assert(boneId < m_boneOffsetMatrixCache.size());
+    return m_boneOffsetMatrixCache[boneId];
+}

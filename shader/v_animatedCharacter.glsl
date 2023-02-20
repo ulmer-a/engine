@@ -3,8 +3,8 @@
 layout (location = 0) in vec3 a_Position;
 layout (location = 1) in vec3 a_Normal;
 layout (location = 2) in vec3 a_TexCoord;
-layout (location = 3) in uvec4 a_BoneIds;
-layout (location = 4) in vec4 a_Weights;
+layout (location = 3) in uint a_BoneIds[10];
+layout (location = 4) in float a_Weights[10];
 
 uniform mat4 u_MVP;
 

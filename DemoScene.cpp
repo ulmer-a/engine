@@ -1,5 +1,4 @@
 #include <glm/glm.hpp>
-#include <spdlog/spdlog.h>
 #include <imgui/imgui.h>
 
 #include <engine/Engine.h>
@@ -100,10 +99,7 @@ namespace EngineApp {
             m_vertexBuffer.addFloatLayoutAttribute(3);
             m_vertexBuffer.setData<glm::vec3>(vertices);
 
-            if (!(m_characterMeshLoaded = m_characterMesh.read("../data/man_suit.fbx", true)))
-            {
-                spdlog::warn("cannot load character man_suit fbx file");
-            }
+            m_characterMeshLoaded = m_characterMesh.fromFile("../data/man_suit.fbx");
         }
 
         void update() override

@@ -40,7 +40,8 @@ add_library(engine STATIC
         renderer/Shader.cpp
         renderer/Renderer.cpp
         renderer/ShaderProgram.cpp
-        renderer/Camera.cpp)
+        renderer/Camera.cpp
+        )
 
 target_include_directories(engine PUBLIC
         /usr/include/imgui
