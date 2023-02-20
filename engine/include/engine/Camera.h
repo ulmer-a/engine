@@ -10,7 +10,7 @@ namespace Engine {
         public:
             Camera(glm::vec3 cameraPosition,
                    glm::vec3 lookAtPoint = glm::vec3(0.0, 0.0, 0.0),
-                   glm::vec3 upVector = glm::vec3(0.0, 0.0, 1.0)
+                   glm::vec3 upVector = glm::vec3(0.0, 1.0, 0.0)
             );
 
             void setPosition(glm::vec3 cameraPosition);

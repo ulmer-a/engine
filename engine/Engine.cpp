@@ -67,6 +67,7 @@ namespace Engine {
 
         // we are using multisampling-anti-aliasing (MSAA) with four samples
         glfwWindowHint(GLFW_SAMPLES, 4);
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
         // here we could try to request a specific OpenGL version
         //glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_VERSION_MAJOR);

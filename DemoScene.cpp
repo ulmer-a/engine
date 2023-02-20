@@ -22,8 +22,9 @@ namespace EngineApp {
     public:
         DemoSceneConfigWindow()
                 : Window("Demo Scene Config Window")
-                  , m_cameraPos{1.0, 10.0, 3.0}
-                  , m_cameraLookAt{0.0, 0.0, 0.0}
+                  , m_animationStep(0)
+                  , m_cameraPos{-150.0, 200.0, 200.0}
+                  , m_cameraLookAt{0.0, 100.0, 10.0}
         {}
 
     protected:
@@ -38,11 +39,14 @@ namespace EngineApp {
             ImGui::Text("Average real frame rate: %f FPS", io.Framerate);
             ImGui::SliderFloat("Framerate limit", &Engine::framerateLimit(), 1.0, 60.0);
             ImGui::Separator();
-            ImGui::SliderFloat3("Camera Position", (float *) &m_cameraPos, -20.0, 20.0);
-            ImGui::SliderFloat3("Camera Look-At", (float *) &m_cameraLookAt, -20.0, 20.0);
+            ImGui::SliderFloat3("Camera Position", (float *) &m_cameraPos, -200.0, 200.0);
+            ImGui::SliderFloat3("Camera Look-At", (float *) &m_cameraLookAt, -200.0, 200.0);
+            ImGui::Separator();
+            ImGui::SliderInt("Animation Step", &m_animationStep, 0, 255);
         }
 
     public:
+        int m_animationStep;
         float m_cameraPos[3];
         float m_cameraLookAt[3];
     };
@@ -70,6 +74,7 @@ namespace EngineApp {
             // of the u_MVP uniform so we can upload the MVP matrix later...
             u_mvp = m_gridFloorShaderProgram.getUniformByName("u_MVP");
             u_mvpChar = m_characterShader.getUniformByName("u_MVP");
+            u_boneTransforms = m_characterShader.getUniformByName("u_boneTransforms");
 
             // We want to render a tiled floor that spans a square area of 100 m2. To do
             // that we create a vertex buffer here in the constructor and fill it with
@@ -100,6 +105,7 @@ namespace EngineApp {
             m_vertexBuffer.setData<glm::vec3>(vertices);
 
             m_characterMeshLoaded = m_characterMesh.fromFile("../data/man_suit.fbx");
+            m_boneTransforms.resize(256);
         }
 
         void update() override
@@ -111,6 +117,8 @@ namespace EngineApp {
                                                config->m_cameraPos[1], config->m_cameraPos[2]));
             getCamera()->setLookAtPoint(glm::vec3(config->m_cameraLookAt[0],
                                                   config->m_cameraLookAt[1], config->m_cameraLookAt[2]));
+
+            m_characterMesh.getAnimationTransforms(0, config->m_animationStep, m_boneTransforms);
         }
 
         void render(const glm::mat4 &projectionMatrix) override
@@ -128,13 +136,15 @@ namespace EngineApp {
             if (m_characterMeshLoaded)
             {
                 m_characterShader.use();
+                m_characterShader.setUniform(u_boneTransforms, m_boneTransforms);
                 m_characterMesh.render();
             }
         }
 
     private:
+        std::vector<glm::mat4> m_boneTransforms;
         bool m_characterMeshLoaded;
-        unsigned int u_mvp, u_mvpChar;
+        unsigned int u_mvp, u_mvpChar, u_boneTransforms;
         Engine::Mesh m_characterMesh;
         Engine::Renderer::VertexBuffer m_vertexBuffer;
         Engine::Renderer::ShaderProgram m_gridFloorShaderProgram, m_characterShader;

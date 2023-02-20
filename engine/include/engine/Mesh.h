@@ -16,7 +16,7 @@ struct aiNodeAnim;
 namespace Engine {
 
     namespace _internal {
-        const size_t MAX_WEIGHTS_PER_BONE = 10;
+        const size_t MAX_WEIGHTS_PER_BONE = 8;
 
         struct MeshVertex
         {
@@ -116,6 +116,7 @@ namespace Engine {
          */
         std::map<std::string, unsigned int> m_boneIds;
         std::vector<glm::mat4> m_boneOffsetMatrixCache;
+        glm::mat4 m_globalInverseTransform;
 
         /**
          * all vertices of all meshes are contained in a single vertex buffer. this

@@ -57,8 +57,10 @@ bool Mesh::fromFile(const std::string &filename)
     m_vertexBuffer.addFloatLayoutAttribute(3);  // position
     m_vertexBuffer.addFloatLayoutAttribute(3);  // normals
     m_vertexBuffer.addFloatLayoutAttribute(3);  // texture coords
-    m_vertexBuffer.addUnsignedIntLayoutAttribute(MAX_WEIGHTS_PER_BONE);  // bone ids
-    m_vertexBuffer.addFloatLayoutAttribute(MAX_WEIGHTS_PER_BONE);  // bone weights
+    m_vertexBuffer.addUnsignedIntLayoutAttribute(MAX_WEIGHTS_PER_BONE / 2);  // bone ids
+    m_vertexBuffer.addUnsignedIntLayoutAttribute(MAX_WEIGHTS_PER_BONE / 2);  // bone ids
+    m_vertexBuffer.addFloatLayoutAttribute(MAX_WEIGHTS_PER_BONE / 2);  // bone weights
+    m_vertexBuffer.addFloatLayoutAttribute(MAX_WEIGHTS_PER_BONE / 2);  // bone weights
 
     // upload vertices to vertex buffer in GPU memory
     m_vertexBuffer.setData(vertices);
@@ -90,7 +92,11 @@ Mesh::getAnimationTransforms(unsigned int animationId, float normalizedTime, std
 
     assert(animationId < scene->mNumAnimations);
     const auto animation = scene->mAnimations[animationId];
-    boneTransforms.resize(getBoneCount());
+
+    if (boneTransforms.size() < getBoneCount())
+    {
+        boneTransforms.resize(getBoneCount());
+    }
 
     buildBoneTransforms(animation, normalizedTime, scene->mRootNode, glm::mat4(1.0f), boneTransforms);
 }
@@ -146,6 +152,9 @@ void Mesh::fillBoneData(std::vector<_internal::MeshVertex> &vertices)
 {
     auto scene = m_importer.GetScene();
     assert(scene != nullptr);
+
+    m_globalInverseTransform = aiToGlmMat4(scene->mRootNode->mTransformation);
+    m_globalInverseTransform = glm::inverse(m_globalInverseTransform);
 
     for (unsigned int i = 0; i < scene->mNumMeshes; i++)
     {
@@ -227,8 +236,8 @@ void Mesh::buildBoneTransforms(const aiAnimation *animation, float normalizedTim
     auto boneId = getBoneId(node->mName.C_Str());
     if (boneId.has_value())
     {
-        boneTransforms[boneId.value()] = /* globalInverseTransform * */
-                globalTransform * getBoneOffsetMatrix(boneId.value());
+        boneTransforms[boneId.value()] = m_globalInverseTransform *
+                                         globalTransform * getBoneOffsetMatrix(boneId.value());
     }
 
     // Now perform the same actions for the node's children as well.

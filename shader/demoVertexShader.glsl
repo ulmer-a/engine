@@ -6,7 +6,7 @@ out vec4 triangleColor;
 
 void main()
 {
-    gl_Position = u_MVP * vec4(a_Position.x, a_Position.y, 0.0, 1.0);
+    gl_Position = u_MVP * vec4(a_Position.x, 0.0, a_Position.y, 1.0);
 
     float color = a_Position.z;
     if (color < 0) {
